@@ -1,0 +1,14 @@
+.{
+    .name = "raylib-and-raygui-example",
+    .version = "0.0.1",
+    .dependencies = .{
+        .raylib = .{ 
+            .url = "https://github.com/raysan5/raylib/archive/876e6b3a0d4db8e6124bf8f95d048879f2f760b1.tar.gz",
+            .hash = "1220bd9c983d89fa08ecfcec29f5e35887dd023ab99b98845be6e929989f71ee661b"
+        },
+        .raygui = .{ 
+            .url = "https://github.com/raysan5/raygui/archive/499e8bf7b1d9b0a92af8f685e646bc61f13c6dff.tar.gz",
+            .hash = "122005a45aa0cf025fd0e72f3f3ec9b8c738cc86c52cb32d72d334035acdcee1c726"
+        },
+    },
+}
