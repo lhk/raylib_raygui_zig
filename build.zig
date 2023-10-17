@@ -15,51 +15,7 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    // Add in any project dependencies. We pull these down from the urls in build.zig.zon
-    const raylib_package = b.dependency("raylib", .{
-        .optimize = optimize,
-        .target = target,
-        // Add in optional modules in raylib. These match up to the options struct
-        // https://github.com/raysan5/raylib/blob/bc15c19518968878b68bbfe8eac3fe4297f11770/src/build.zig#L161
-        .raudio = true,
-        .rmodels = true,
-        .rshapes = true,
-        .rtext = true,
-        .rtextures = true,
-        // we need to have raygui as a seperate dependency because the current build script
-        // in raylib for including raygui is broken :( Raylib raygui.c supposes that raygui 
-        // is in a nearby directory, this is not true when using the package manager
-        .raygui = false,
-        .platform_drm = false,
-    });
-    // This is a convenience for when we need to link raygui to raylib
-    const raylib_artifact = raylib_package.artifact("raylib");
-
-    // We can use the raygui repo. But it doesn't have a build.zig script
-    // so we will need to manage linking the important files ourselves
-    const raygui_package = b.dependency("raygui", .{
-        .optimize = optimize,
-        .target = target,
-    });
-
-    // We need to generate the implementation for raygui.h in raygui.c
-    // https://github.com/raysan5/raylib/blob/bc15c19518968878b68bbfe8eac3fe4297f11770/src/build.zig#L60  
-    const generate_raygui_c = b.addWriteFiles();
-    const generated_file = generate_raygui_c.add("src/raygui.c", "#define RAYGUI_IMPLEMENTATION\n#define RAYGUI_STANDALONE\n#include \"raygui.h\"\n");
-    // Since this repo doesn't have a build.zig, we will add it as a static library to link to the exe
-    const raygui_lib = b.addStaticLibrary(.{
-        .name = "raygui",
-        .root_source_file = generated_file,
-        .link_libc = true,
-        .optimize = optimize,
-        .target = target,
-    });
-    raygui_lib.step.dependOn(&generate_raygui_c.step);
-    raygui_lib.addIncludePath(raygui_package.path("src/"));
-    raygui_lib.addIncludePath(raylib_package.path("src/"));
-    raygui_lib.linkLibrary(raylib_artifact); // raygui depends on raylib
-
-    // This is where we specify the main executable
+    // This is where we specify the main executable we want to build.
     const exe = b.addExecutable(.{
         .name = "raylib-and-raygui-example",
         .root_source_file = .{ .path = "src/main.zig" },
@@ -67,9 +23,56 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    // We need to link any of the depedencies we build
-    exe.linkLibrary(raylib_artifact);
+    // Now we add in any project dependencies.
+    // We can pull these down from the urls in build.zig.zon by matching the dependency names
+    const raylib_package = b.dependency("raylib", .{
+        .optimize = optimize,
+        .target = target,
+        // Add in optional modules in raylib. These match up to the options struct.
+        // https://github.com/raysan5/raylib/blob/bc15c19518968878b68bbfe8eac3fe4297f11770/src/build.zig#L161
+        .raudio = true,
+        .rmodels = true,
+        .rshapes = true,
+        .rtext = true,
+        .rtextures = true,
+        // we need to have raygui as a seperate dependency because the current build script
+        // in raylib for including raygui is broken :( Raylib raygui.c supposes that raygui
+        // is in a specific nearby directory, this is not true when using the package manager.
+        .raygui = false,
+        .platform_drm = false,
+    });
+    
+    // We can use the raygui repo. But it doesn't have a build.zig script
+    // so we will need to manage linking the important files ourselves.
+    const raygui_package = b.dependency("raygui", .{
+        .optimize = optimize,
+        .target = target,
+    });
+
+    // Since this repo doesn't have a build.zig, we will add it as a static library to link to the exe
+    const raygui_lib = b.addStaticLibrary(.{
+        .name = "raygui",
+        .link_libc = true,
+        .optimize = optimize,
+        .target = target,
+    });
+    // We need to generate the implementation for raygui.h
+    // https://github.com/raysan5/raylib/blob/bc15c19518968878b68bbfe8eac3fe4297f11770/src/build.zig#L60
+    raygui_lib.addCSourceFile(.{
+        .file = raygui_package.path("src/raygui.h"),
+        .flags = &[_][]const u8{"-DRAYGUI_IMPLEMENTATION"}
+    });
+    // raygui relys on raylib headers too, so include that directory for raygui.
+    raygui_lib.addIncludePath(raylib_package.path("src/"));
+
+    // We now need to link any of the depedencies we have for the project
+    // If a dependency is a zig project (or contains a build.zig file),
+    // we link the artifact. Otherwise we need to link the library.
+    exe.linkLibrary(raylib_package.artifact("raylib"));
     exe.linkLibrary(raygui_lib);
+    // We also need to include the header file locations for exe dependencies.
+    exe.addIncludePath(raygui_package.path("src/"));
+    exe.addIncludePath(raylib_package.path("src/"));
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
